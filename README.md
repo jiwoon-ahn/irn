@@ -1,5 +1,5 @@
 # Weakly Supervised Learning of Instance Segmentation with Inter-pixel Relations
-
+<p align="center"><img src="outline.jpg" alt="outline" width="90%"></p>
 The code of:
 
 Weakly Supervised Learning of Instance Segmentation with Inter-pixel Relations, Jiwoon Ahn, Sunghyun Cho, and Suha Kwak, CVPR 2019 [[Paper]](https://arxiv.org/abs/1904.05044)
