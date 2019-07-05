@@ -1,10 +1,25 @@
 import random
 import numpy as np
-import skimage.measure
-import skimage.transform
 
 import pydensecrf.densecrf as dcrf
 from pydensecrf.utils import unary_from_labels
+from PIL import Image
+
+def pil_resize(img, size, order):
+    if size[0] == img.shape[0] and size[1] == img.shape[1]:
+        return img
+
+    if order == 3:
+        resample = Image.BICUBIC
+    elif order == 0:
+        resample = Image.NEAREST
+
+    return np.asarray(Image.fromarray(img).resize(size[::-1], resample))
+
+def pil_rescale(img, scale, order):
+    height, width = img.shape[:2]
+    target_size = (int(np.round(height*scale)), int(np.round(width*scale)))
+    return pil_resize(img, target_size, order)
 
 
 def random_resize_long(img, min_long, max_long):
@@ -16,17 +31,16 @@ def random_resize_long(img, min_long, max_long):
     else:
         scale = target_long / w
 
-    return skimage.transform.rescale(img, scale=scale, order=3, preserve_range=True, anti_aliasing=True, multichannel=True)
+    return pil_rescale(img, scale, 3)
 
 def random_scale(img, scale_range, order):
 
     target_scale = scale_range[0] + random.random() * (scale_range[1] - scale_range[0])
 
     if isinstance(img, tuple):
-        return [skimage.transform.rescale(img[0], target_scale, order[0], preserve_range=True, anti_aliasing=False, multichannel=True),
-                skimage.transform.rescale(img[1], target_scale, order[1], preserve_range=True, anti_aliasing=False, multichannel=False)]
+        return (pil_rescale(img[0], target_scale, order[0]), pil_rescale(img[1], target_scale, order[1]))
     else:
-        return skimage.transform.rescale(img, target_scale, order, preserve_range=True, anti_aliasing=False, multichannel=True)
+        return pil_rescale(img[0], target_scale, order)
 
 def random_lr_flip(img):
 
@@ -101,10 +115,6 @@ def top_left_crop(img, cropsize, default_value):
     container[:ch, :cw] = img[:ch, :cw]
 
     return container
-
-def pool2d(img, ksize, reduce_func):
-
-    return skimage.measure.block_reduce(img, (ksize, ksize), reduce_func)
 
 def center_crop(img, cropsize, default_value=0):
 
