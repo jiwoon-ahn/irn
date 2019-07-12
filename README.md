@@ -39,4 +39,4 @@ python run_sample.py
 * You can either mannually edit the file, or specify commandline arguments.
 
 ## Coming Soon
-* Add compatibility with TorchVision Mark R-CNN, DeepLab (July 14)
+* Add compatibility with TorchVision Mask R-CNN, DeepLab (July 14)
