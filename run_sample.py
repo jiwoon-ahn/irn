@@ -9,23 +9,27 @@ if __name__ == '__main__':
 
     # Environment
     parser.add_argument("--num_workers", default=os.cpu_count()//2, type=int)
-    parser.add_argument("--voc12_root", required=True, type=str)
+    parser.add_argument("--voc12_root", required=True, type=str,
+                        help="Path to VOC 2012 Devkit, must contain ./JPEGImages as subdirectory.")
 
     # Dataset
     parser.add_argument("--train_list", default="voc12/train_aug.txt", type=str)
     parser.add_argument("--val_list", default="voc12/val.txt", type=str)
-    parser.add_argument("--infer_list", default="voc12/train.txt", type=str)
+    parser.add_argument("--infer_list", default="voc12/train.txt", type=str,
+                        help="voc12/train_aug.txt to train a fully supervised model, "
+                             "voc12/train.txt or voc12/val.txt to quickly check the quality of the labels.")
     parser.add_argument("--chainer_eval_set", default="train", type=str)
 
     # Class Activation Map
     parser.add_argument("--cam_network", default="net.resnet50_cam", type=str)
     parser.add_argument("--cam_crop_size", default=512, type=int)
-    parser.add_argument("--cam_batch_size", required=True, type=int)
+    parser.add_argument("--cam_batch_size", default=16, type=int)
     parser.add_argument("--cam_num_epoches", default=5, type=int)
-    parser.add_argument("--cam_learning_rate", required=True, type=float)
+    parser.add_argument("--cam_learning_rate", default=0.1, type=float)
     parser.add_argument("--cam_weight_decay", default=1e-4, type=float)
     parser.add_argument("--cam_eval_thres", default=0.15, type=float)
-    parser.add_argument("--cam_scales", default=(1.0, 0.5, 1.5, 2.0))
+    parser.add_argument("--cam_scales", default=(1.0, 0.5, 1.5, 2.0),
+                        help="Multi-scale inferences")
 
     # Mining Inter-pixel Relations
     parser.add_argument("--conf_fg_thres", default=0.30, type=float)
@@ -34,14 +38,16 @@ if __name__ == '__main__':
     # Inter-pixel Relation Network (IRNet)
     parser.add_argument("--irn_network", default="net.resnet50_irn", type=str)
     parser.add_argument("--irn_crop_size", default=512, type=int)
-    parser.add_argument("--irn_batch_size", required=True, type=int)
+    parser.add_argument("--irn_batch_size", default=32, type=int)
     parser.add_argument("--irn_num_epoches", default=3, type=int)
-    parser.add_argument("--irn_learning_rate", required=True, type=float)
+    parser.add_argument("--irn_learning_rate", default=0.1, type=float)
     parser.add_argument("--irn_weight_decay", default=1e-4, type=float)
 
     # Random Walk Params
     parser.add_argument("--beta", default=10)
-    parser.add_argument("--exp_times", default=8)
+    parser.add_argument("--exp_times", default=8,
+                        help="Hyper-parameter that controls the number of random walk iterations,"
+                             "The random walk is performed 2^{exp_times}.")
     parser.add_argument("--ins_seg_bg_thres", default=0.25)
     parser.add_argument("--sem_seg_bg_thres", default=0.25)
 
