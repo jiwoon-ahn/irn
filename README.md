@@ -39,7 +39,7 @@ python run_sample.py
 * You can either mannually edit the file, or specify commandline arguments.
 
 #### Train Mask R-CNN or DeepLab with the generated pseudo labels
-* For the reports, we used [Detectron](https://github.com/facebookresearch/Detectron) and [Official-Caffe-DeepLab-v2](https://bitbucket.org/aquariusjay/deeplab-public-ver2).
+* For the reports, we used [Detectron](https://github.com/facebookresearch/Detectron).
   * Run step/make_cocoann.py to create COCO-style annotations.
   * Note: Do not employ https://storage.googleapis.com/coco-dataset/external/PASCAL_VOC.zip to measure the performance of the Mask R-CNN! This file only contains bounding box annotations.
 * [TorchVision](https://pytorch.org/docs/stable/torchvision/models.html) now supports Mask R-CNN and DeepLab! I personally recommend to use this.
