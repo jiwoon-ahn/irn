@@ -36,7 +36,8 @@ def run(args):
         instance_id = 1
 
         for score, mask, class_id in zip( ann['score'], ann['mask'], ann['class']):
-
+            if score < 1e-5:
+                continue
             category_info = {'id': class_id, 'is_crowd': False}
 
             annotation_info = pycococreatortools.create_annotation_info(
