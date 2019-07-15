@@ -4,7 +4,7 @@ The code of:
 
 Weakly Supervised Learning of Instance Segmentation with Inter-pixel Relations, Jiwoon Ahn, Sunghyun Cho, and Suha Kwak, CVPR 2019 [[Paper]](https://arxiv.org/abs/1904.05044)
 
-This repository contains a framework for learning instance segmentation with image-level class labels as supervision. The key component of our approach is Inter-pixel Relation Network (IRNet) that is used to estimate two types of information: a displacement vector field and a class boundary map, both of which are in turn used to estimate pseudo instance masks from CAMs.
+This repository contains a framework for learning instance segmentation with image-level class labels as supervision. The key component of our approach is Inter-pixel Relation Network (IRNet) that estimates two types of information: a displacement vector field and a class boundary map, both of which are in turn used to generate pseudo instance masks from CAMs.
 
 ## Citation
 If you find the code useful, please consider citing our paper using the following BibTeX entry.
@@ -38,5 +38,8 @@ python run_sample.py
 ```
 * You can either mannually edit the file, or specify commandline arguments.
 
-## Coming Soon
-* Add compatibility with TorchVision Mask R-CNN, DeepLab (July 14)
+#### Train Mask R-CNN or DeepLab with the generated pseudo labels
+* For the reports, we used [Detectron](https://github.com/facebookresearch/Detectron) and [Official-Caffe-DeepLab-v2](https://bitbucket.org/aquariusjay/deeplab-public-ver2).
+  * Run step/make_cocoann.py to create COCO-style annotations.
+  * Note: Do not employ https://storage.googleapis.com/coco-dataset/external/PASCAL_VOC.zip to measure the performance of the Mask R-CNN! This file only contains bounding box annotations.
+* [TorchVision](https://pytorch.org/docs/stable/torchvision/models.html) now supports Mask R-CNN and DeepLab! I personally recommend to use this.
