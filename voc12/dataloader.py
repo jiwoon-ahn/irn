@@ -153,7 +153,7 @@ class VOC12ImageDataset(Dataset):
         if self.to_torch:
             img = imutils.HWC_to_CHW(img)
 
-        return {'name': name, 'img': img}
+        return {'name': name_str, 'img': img}
 
 class VOC12ClassificationDataset(VOC12ImageDataset):
 
@@ -271,3 +271,4 @@ class VOC12AffinityDataset(VOC12SegmentationDataset):
         out['aff_bg_pos_label'], out['aff_fg_pos_label'], out['aff_neg_label'] = self.extract_aff_lab_func(reduced_label)
 
         return out
+
