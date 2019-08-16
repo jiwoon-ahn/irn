@@ -46,3 +46,5 @@ python run_sample.py
 
 ## TO DO
 * Training code for MS-COCO
+* Code refactoring
+* IRNet v2
