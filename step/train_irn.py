@@ -11,10 +11,8 @@ def run(args):
 
     path_index = indexing.PathIndex(radius=10, default_size=(args.irn_crop_size // 4, args.irn_crop_size // 4))
 
-    model = getattr(importlib.import_module(args.irn_network), 'AffinityDisplacement')(
-        path_index.default_path_indices,
-        torch.from_numpy(path_index.default_src_indices),
-        torch.from_numpy(path_index.default_dst_indices))
+    model = getattr(importlib.import_module(args.irn_network), 'AffinityDisplacementLoss')(
+        path_index)
 
     train_dataset = voc12.dataloader.VOC12AffinityDataset(args.train_list,
                                                           label_dir=args.ir_label_out_dir,
@@ -37,7 +35,7 @@ def run(args):
         {'params': param_groups[1], 'lr': 10*args.irn_learning_rate, 'weight_decay': args.irn_weight_decay}
     ], lr=args.irn_learning_rate, weight_decay=args.irn_weight_decay, max_step=max_step)
 
-    model = model.cuda()
+    model = torch.nn.DataParallel(model).cuda()
     model.train()
 
     avg_meter = pyutils.AverageMeter()
@@ -55,38 +53,59 @@ def run(args):
             fg_pos_label = pack['aff_fg_pos_label'].cuda(non_blocking=True)
             neg_label = pack['aff_neg_label'].cuda(non_blocking=True)
 
-            aff, dp = model(img)
+            pos_aff_loss, neg_aff_loss, dp_fg_loss, dp_bg_loss = model(img, True)
 
-            dp = path_index.to_displacement(dp)
+            bg_pos_aff_loss = torch.sum(bg_pos_label * pos_aff_loss) / (torch.sum(bg_pos_label) + 1e-5)
+            fg_pos_aff_loss = torch.sum(fg_pos_label * pos_aff_loss) / (torch.sum(fg_pos_label) + 1e-5)
+            pos_aff_loss = bg_pos_aff_loss / 2 + fg_pos_aff_loss / 2
+            neg_aff_loss = torch.sum(neg_label * neg_aff_loss) / (torch.sum(neg_label) + 1e-5)
 
-            bg_pos_aff_loss = torch.sum(- bg_pos_label * torch.log(aff + 1e-5)) / (torch.sum(bg_pos_label) + 1e-5)
-            fg_pos_aff_loss = torch.sum(- fg_pos_label * torch.log(aff + 1e-5)) / (torch.sum(fg_pos_label) + 1e-5)
-            pos_aff_loss = bg_pos_aff_loss/2 + fg_pos_aff_loss/2
+            dp_fg_loss = torch.sum(dp_fg_loss * torch.unsqueeze(fg_pos_label, 1)) / (2 * torch.sum(fg_pos_label) + 1e-5)
+            dp_bg_loss = torch.sum(dp_bg_loss * torch.unsqueeze(bg_pos_label, 1)) / (2 * torch.sum(bg_pos_label) + 1e-5)
 
-            neg_aff_loss = torch.sum(- neg_label * torch.log(1. + 1e-5 - aff)) / (torch.sum(neg_label) + 1e-5)
+            avg_meter.add({'loss1': pos_aff_loss.item(), 'loss2': neg_aff_loss.item(),
+                           'loss3': dp_fg_loss.item(), 'loss4': dp_bg_loss.item()})
 
-            dp_fg_loss = torch.sum(path_index.to_displacement_loss(dp) * torch.unsqueeze(fg_pos_label, 1)) / (2*torch.sum(fg_pos_label) + 1e-5)
-
-            dp_bg_loss = torch.sum(torch.abs(dp) * torch.unsqueeze(bg_pos_label, 1)) / (2*torch.sum(bg_pos_label) + 1e-5)
-
-            avg_meter.add({'loss1': pos_aff_loss, 'loss2': neg_aff_loss, 'loss3': dp_fg_loss.item(), 'loss4': dp_bg_loss.item()})
-
-            total_loss = (pos_aff_loss + neg_aff_loss)/2 + (dp_fg_loss + dp_bg_loss)/2
+            total_loss = (pos_aff_loss + neg_aff_loss) / 2 + (dp_fg_loss + dp_bg_loss) / 2
 
             optimizer.zero_grad()
             total_loss.backward()
             optimizer.step()
 
-            if (optimizer.global_step-1)%100 == 0:
+            if (optimizer.global_step - 1) % 50 == 0:
                 timer.update_progress(optimizer.global_step / max_step)
 
                 print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),
-                      'loss:%.4f %.4f %.4f %.4f' % (avg_meter.pop('loss1'), avg_meter.pop('loss2'), avg_meter.pop('loss3'), avg_meter.pop('loss4')),
-                      'imps:%.1f' % ((iter+1) * args.irn_batch_size / timer.get_stage_elapsed()),
+                      'loss:%.4f %.4f %.4f %.4f' % (
+                      avg_meter.pop('loss1'), avg_meter.pop('loss2'), avg_meter.pop('loss3'), avg_meter.pop('loss4')),
+                      'imps:%.1f' % ((iter + 1) * args.irn_batch_size / timer.get_stage_elapsed()),
                       'lr: %.4f' % (optimizer.param_groups[0]['lr']),
                       'etc:%s' % (timer.str_estimated_complete()), flush=True)
         else:
             timer.reset_stage()
 
-    torch.save(model.state_dict(), args.irn_weights_name)
+    infer_dataset = voc12.dataloader.VOC12ImageDataset(args.infer_list,
+                                                       voc12_root=args.voc12_root,
+                                                       crop_size=args.irn_crop_size,
+                                                       crop_method="top_left")
+    infer_data_loader = DataLoader(infer_dataset, batch_size=args.irn_batch_size,
+                                   shuffle=False, num_workers=args.num_workers, pin_memory=True, drop_last=True)
+
+    model.eval()
+    print('Analyzing displacements mean ... ', end='')
+
+    dp_mean_list = []
+
+    with torch.no_grad():
+        for iter, pack in enumerate(infer_data_loader):
+            img = pack['img'].cuda(non_blocking=True)
+
+            aff, dp = model(img, False)
+
+            dp_mean_list.append(torch.mean(dp, dim=(0, 2, 3)).cpu())
+
+        model.module.mean_shift.running_mean = torch.mean(torch.stack(dp_mean_list), dim=0)
+    print('done.')
+
+    torch.save(model.module.state_dict(), args.irn_weights_name)
     torch.cuda.empty_cache()

@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -6,21 +5,17 @@ import numpy as np
 
 class PathIndex:
 
-    def __init__(self, radius=5, default_size=None):
-
+    def __init__(self, radius, default_size):
         self.radius = radius
         self.radius_floor = int(np.ceil(radius) - 1)
 
-        self.path_list_by_length, self.path_dst = self.get_all_dir_paths(self.radius)
-        self.path_dst2 = torch.unsqueeze(torch.unsqueeze(torch.from_numpy(self.path_dst).transpose(1, 0), 0), -1).float()
+        self.search_paths, self.search_dst = self.get_search_paths_dst(self.radius)
 
-        if default_size:
-            self.default_path_indices, self.default_src_indices, self.default_dst_indices \
-                = self.get_path_indices(default_size)
+        self.path_indices, self.src_indices, self.dst_indices = self.get_path_indices(default_size)
 
         return
 
-    def get_all_dir_paths(self, max_radius=5):
+    def get_search_paths_dst(self, max_radius=5):
 
         coord_indices_by_length = [[] for _ in range(max_radius * 4)]
 
@@ -67,9 +62,9 @@ class PathIndex:
         cropped_height = size[0] - self.radius_floor
         cropped_width = size[1] - 2 * self.radius_floor
 
-        paths_by_length_list = []
+        path_indices = []
 
-        for paths in self.path_list_by_length:
+        for paths in self.search_paths:
 
             path_indices_list = []
             for p in paths:
@@ -85,35 +80,12 @@ class PathIndex:
 
                 path_indices_list.append(coord_indices_list)
 
-            paths_by_length_list.append(np.array(path_indices_list))
+            path_indices.append(np.array(path_indices_list))
 
         src_indices = np.reshape(full_indices[:cropped_height, self.radius_floor:self.radius_floor + cropped_width], -1)
-        dest_indices = np.concatenate([p[:,0] for p in paths_by_length_list], axis=0)
+        dst_indices = np.concatenate([p[:,0] for p in path_indices], axis=0)
 
-        return paths_by_length_list, \
-               src_indices, \
-               dest_indices
-
-    def to_displacement(self, x):
-        height, width = x.size(2), x.size(3)
-
-        cropped_height = height - self.radius_floor
-        cropped_width = width - 2 * self.radius_floor
-
-        feat_src = x[:, :, :cropped_height, self.radius_floor:self.radius_floor + cropped_width]
-
-        feat_dest = [x[:, :, dy:dy + cropped_height, self.radius_floor + dx:self.radius_floor + dx + cropped_width]
-                       for dy, dx in self.path_dst]
-        feat_dest = torch.stack(feat_dest, 2)
-
-        disp = torch.unsqueeze(feat_src, 2) - feat_dest
-        disp = disp.view(disp.size(0), disp.size(1), disp.size(2), -1)
-
-        return disp
-
-    def to_displacement_loss(self, x):
-
-        return torch.abs(x - self.path_dst2.cuda())
+        return path_indices, src_indices, dst_indices
 
 
 def edge_to_affinity(edge, paths_indices):
@@ -137,24 +109,6 @@ def edge_to_affinity(edge, paths_indices):
     return aff_cat
 
 
-def feature_to_affinity(x, ind_from, ind_to):
-
-    x = x.view(x.size(0), x.size(1), -1)
-
-    if isinstance(ind_from, np.ndarray):
-        ind_from = torch.from_numpy(ind_from)
-        ind_to = torch.from_numpy(ind_to)
-
-    ind_from = torch.unsqueeze(ind_from, dim=0)
-
-    ff = x[..., ind_from.cuda(non_blocking=True)]
-    ft = x[..., ind_to.cuda(non_blocking=True)]
-
-    aff = torch.exp(-torch.mean(torch.abs(ft-ff), dim=1))
-
-    return aff
-
-
 def affinity_sparse2dense(affinity_sparse, ind_from, ind_to, n_vertices):
 
     ind_from = torch.from_numpy(ind_from)
@@ -173,6 +127,7 @@ def affinity_sparse2dense(affinity_sparse, ind_from, ind_to, n_vertices):
                                        torch.cat([affinity_sparse, torch.ones([n_vertices]), affinity_sparse])).to_dense().cuda()
 
     return affinity_dense
+
 
 def to_transition_matrix(affinity_dense, beta, times):
     scaled_affinity = torch.pow(affinity_dense, beta)
@@ -194,10 +149,10 @@ def propagate_to_edge(x, edge, radius=5, beta=10, exp_times=8):
 
     edge_padded = F.pad(edge, (radius, radius, 0, radius), mode='constant', value=1.0)
     sparse_aff = edge_to_affinity(torch.unsqueeze(edge_padded, 0),
-                                               path_index.default_path_indices)
+                                  path_index.path_indices)
 
-    dense_aff = affinity_sparse2dense(sparse_aff, path_index.default_src_indices,
-                                      path_index.default_dst_indices, ver_padded*hor_padded)
+    dense_aff = affinity_sparse2dense(sparse_aff, path_index.src_indices,
+                                      path_index.dst_indices, ver_padded * hor_padded)
     dense_aff = dense_aff.view(ver_padded, hor_padded, ver_padded, hor_padded)
     dense_aff = dense_aff[:-radius, radius:-radius, :-radius, radius:-radius]
     dense_aff = dense_aff.reshape(height * width, height * width)
@@ -205,7 +160,6 @@ def propagate_to_edge(x, edge, radius=5, beta=10, exp_times=8):
     trans_mat = to_transition_matrix(dense_aff, beta=beta, times=exp_times)
 
     x = x.view(-1, height, width) * (1 - edge)
-
 
     rw = torch.matmul(x.view(-1, height * width), trans_mat)
     rw = rw.view(rw.size(0), 1, height, width)
