@@ -61,15 +61,15 @@ if __name__ == '__main__':
     parser.add_argument("--ins_seg_out_dir", default="result/ins_seg", type=str)
 
     # Step
-    parser.add_argument("--train_cam_pass", default=True)
-    parser.add_argument("--make_cam_pass", default=True)
-    parser.add_argument("--eval_cam_pass", default=True)
-    parser.add_argument("--cam_to_ir_label_pass", default=True)
-    parser.add_argument("--train_irn_pass", default=True)
-    parser.add_argument("--make_ins_seg_pass", default=True)
-    parser.add_argument("--eval_ins_seg_pass", default=True)
-    parser.add_argument("--make_sem_seg_pass", default=True)
-    parser.add_argument("--eval_sem_seg_pass", default=True)
+    parser.add_argument("--train_cam", action='store_true')
+    parser.add_argument("--make_cam", action='store_true')
+    parser.add_argument("--eval_cam", action='store_true')
+    parser.add_argument("--cam_to_ir_label", action='store_true')
+    parser.add_argument("--train_irn", action='store_true')
+    parser.add_argument("--make_ins_seg", action='store_true')
+    parser.add_argument("--eval_ins_seg", action='store_true')
+    parser.add_argument("--make_sem_seg", action='store_true')
+    parser.add_argument("--eval_sem_seg", action='store_true')
 
     args = parser.parse_args()
 
@@ -82,55 +82,55 @@ if __name__ == '__main__':
     pyutils.Logger(args.log_name + '.log')
     print(vars(args))
 
-    if args.train_cam_pass is True:
+    if args.train_cam is True:
         import step.train_cam
 
         timer = pyutils.Timer('step.train_cam:')
         step.train_cam.run(args)
 
-    if args.make_cam_pass is True:
+    if args.make_cam is True:
         import step.make_cam
 
         timer = pyutils.Timer('step.make_cam:')
         step.make_cam.run(args)
 
-    if args.eval_cam_pass is True:
+    if args.eval_cam is True:
         import step.eval_cam
 
         timer = pyutils.Timer('step.eval_cam:')
         step.eval_cam.run(args)
 
-    if args.cam_to_ir_label_pass is True:
+    if args.cam_to_ir_label is True:
         import step.cam_to_ir_label
 
         timer = pyutils.Timer('step.cam_to_ir_label:')
         step.cam_to_ir_label.run(args)
 
-    if args.train_irn_pass is True:
+    if args.train_irn is True:
         import step.train_irn
 
         timer = pyutils.Timer('step.train_irn:')
         step.train_irn.run(args)
 
-    if args.make_ins_seg_pass is True:
+    if args.make_ins_seg is True:
         import step.make_ins_seg_labels
 
         timer = pyutils.Timer('step.make_ins_seg_labels:')
         step.make_ins_seg_labels.run(args)
 
-    if args.eval_ins_seg_pass is True:
+    if args.eval_ins_seg is True:
         import step.eval_ins_seg
 
         timer = pyutils.Timer('step.eval_ins_seg:')
         step.eval_ins_seg.run(args)
 
-    if args.make_sem_seg_pass is True:
+    if args.make_sem_seg is True:
         import step.make_sem_seg_labels
 
         timer = pyutils.Timer('step.make_sem_seg_labels:')
         step.make_sem_seg_labels.run(args)
 
-    if args.eval_sem_seg_pass is True:
+    if args.eval_sem_seg is True:
         import step.eval_sem_seg
 
         timer = pyutils.Timer('step.eval_sem_seg:')
