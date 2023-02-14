@@ -1,11 +1,11 @@
 
 import numpy as np
 import os
-from chainercv.datasets import VOCSemanticSegmentationDataset
+from chainercv.datasets import CityscapesSemanticSegmentationDataset
 from chainercv.evaluations import calc_semantic_segmentation_confusion
 
 def run(args):
-    dataset = VOCSemanticSegmentationDataset(split=args.chainer_eval_set, data_dir=args.voc12_root)
+    dataset = CityscapesSemanticSegmentationDataset(split=args.chainer_eval_set, data_dir="/home/postech2/datasets/cityscapes")
     labels = [dataset.get_example_by_keys(i, (1,))[0] for i in range(len(dataset))]
 
     preds = []

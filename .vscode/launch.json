@@ -1,0 +1,26 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: run_sample.py",
+            "type": "python",
+            "request": "launch",
+            "program": "run_sample.py",
+            "args": [
+                "--voc12_root=VOCdevkit/VOC2012",
+                "--train_cam",
+                // "--eval_cam",
+                // "--make_cam",
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "justMyCode": true
+        }
+    ]
+}

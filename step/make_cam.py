@@ -7,13 +7,38 @@ from torch.backends import cudnn
 import numpy as np
 import importlib
 import os
+import wandb
 
-import voc12.dataloader
+from cityscapes.dataset import Cityscapes, MultipleScalesTranform
+from torchvision.transforms import Compose, ToTensor, Resize, ToPILImage, Lambda, PILToTensor
 from misc import torchutils, imutils
 
 cudnn.enabled = True
 
 def _work(process_id, model, dataset, args):
+
+    user = "postech-cv"
+    project = "irn-cityscapes"
+    display_name = "make_cam"
+
+    wandb.init(
+        entity=user,
+        project=project,
+        name=display_name,
+        config={
+            "cam": {
+                "network": args.cam_network,
+                "crop_size": args.cam_crop_size,
+                "batch_size": args.cam_batch_size,
+                "num_epoches": args.cam_num_epoches,
+                "learning_rate": args.cam_learning_rate,
+                "weight_decay": args.cam_weight_decay,
+                "eval_thres": args.cam_eval_thres,
+                "scales": args.cam_scales,
+                "patch_size": args.patch_size,
+            }
+        }
+    )
 
     databin = dataset[process_id]
     n_gpus = torch.cuda.device_count()
@@ -22,26 +47,28 @@ def _work(process_id, model, dataset, args):
     with torch.no_grad(), cuda.device(process_id):
 
         model.cuda()
+        model.eval()
 
-        for iter, pack in enumerate(data_loader):
-
-            img_name = pack['name'][0]
-            label = pack['label'][0]
-            size = pack['size']
-
+        for iter, (image, label, img_name) in enumerate(data_loader):
+            size = (256, 512)
             strided_size = imutils.get_strided_size(size, 4)
             strided_up_size = imutils.get_strided_up_size(size, 16)
 
             outputs = [model(img[0].cuda(non_blocking=True))
-                       for img in pack['img']]
+                       for img in image]
 
-            strided_cam = torch.sum(torch.stack(
-                [F.interpolate(torch.unsqueeze(o, 0), strided_size, mode='bilinear', align_corners=False)[0] for o
-                 in outputs]), 0)
+            strided_cam = torch.stack(
+                [F.interpolate(torch.unsqueeze(o, 0), strided_size, mode='bilinear', align_corners=False).squeeze(0) for o
+                 in outputs], 0)
+            strided_cam = torch.sum(strided_cam, 0)
+            wandb.log({
+                "strided cam": wandb.Image(ToPILImage()(strided_cam))
+            })
 
-            highres_cam = [F.interpolate(torch.unsqueeze(o, 1), strided_up_size,
-                                         mode='bilinear', align_corners=False) for o in outputs]
-            highres_cam = torch.sum(torch.stack(highres_cam, 0), 0)[:, 0, :size[0], :size[1]]
+            highres_cam = torch.stack(
+                [F.interpolate(torch.unsqueeze(o, 1), strided_up_size, mode='bilinear', align_corners=False).squeeze(0) for o
+                 in outputs], 0)
+            highres_cam = torch.sum(highres_cam, 0)[:, 0, :size[0], :size[1]]
 
             valid_cat = torch.nonzero(label)[:, 0]
 
@@ -66,12 +93,19 @@ def run(args):
 
     n_gpus = torch.cuda.device_count()
 
-    dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
-                                                             voc12_root=args.voc12_root, scales=args.cam_scales)
+    dataset = Cityscapes(
+        "/home/postech2/datasets/cityscapes", 
+        split='val', 
+        mode='fine',
+        target_type='semantic', 
+        transform=Compose([ToTensor(), Resize((128, 256)), MultipleScalesTranform(args.cam_scales)]), 
+        target_transform=Compose([PILToTensor(), Resize(256)])
+    )
     dataset = torchutils.split_dataset(dataset, n_gpus)
 
     print('[ ', end='')
-    multiprocessing.spawn(_work, nprocs=n_gpus, args=(model, dataset, args), join=True)
+    _work(0, model, dataset, args)
+    # multiprocessing.spawn(_work, nprocs=n_gpus, args=(model, dataset, args), join=True)
     print(']')
 
     torch.cuda.empty_cache()

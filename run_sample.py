@@ -18,7 +18,8 @@ if __name__ == '__main__':
     dataset_group.add_argument("--infer_list", default="voc12/train.txt", type=str,
                         help="voc12/train_aug.txt to train a fully supervised model, "
                              "voc12/train.txt or voc12/val.txt to quickly check the quality of the labels.")
-    dataset_group.add_argument("--chainer_eval_set", default="train", type=str)
+    dataset_group.add_argument("--chainer_eval_set", default="val", type=str)
+    dataset_group.add_argument("--patch_size", default=32, type=int)
 
     cam_group = parser.add_argument_group("Class Activation Map")
     cam_group.add_argument("--cam_network", default="net.resnet50_cam", type=str)
@@ -83,10 +84,10 @@ if __name__ == '__main__':
     print(vars(args))
 
     if args.train_cam is True:
-        import step.train_cam
+        import step.train_cam_grid
 
         timer = pyutils.Timer('step.train_cam:')
-        step.train_cam.run(args)
+        step.train_cam_grid.run(args)
 
     if args.make_cam is True:
         import step.make_cam

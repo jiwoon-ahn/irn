@@ -1,0 +1,30 @@
+program: run_sample.py
+name: irn-sweep
+project: irn-patch
+method: bayes
+metric:
+  name: cam.val.macro_avg_precision
+  goal: maximize
+parameters:
+  patch_size:
+    values: [32, 64, 128]
+  cam_crop_size:
+    value: 128
+  cam_batch_size:
+    value: 512
+  cam_num_epoches:
+    value: 5
+  cam_learning_rate:
+    values: [0.001, 0.0001, 0.00001]
+  cam_weight_decay:
+    value: 0.0001
+
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - ${args}
+  - "--voc12_root=VOCdevkit/VOC2012"
+  - "--train_cam"
+  - "--cam_batch_size=256"
+    
