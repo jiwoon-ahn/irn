@@ -8,6 +8,8 @@ from enum import Enum, auto
 from functools import lru_cache
 import typing
 
+from tqdm import tqdm
+
 import cv2
 
 class Divide(Enum):
@@ -74,8 +76,46 @@ class CityScapesDividedDataset(Dataset):
         return path.join(self._cityscapes_dir, "gtFine", self.dir_str, base_dirname, train_id_base_filename)
     
     def __len__(self):
+        # return 1024
         return len(self.images_filename) * self.rows_per_image * self.columns_per_image
+    
+    @lru_cache()
+    def class_distribution(self):
+        result = np.zeros(shape=(20,))
+        for f in tqdm(self.images_filename, desc="loading class distribution"):
+            _, hot_label_np, _ = self._get_divided_image_labels(f)
+            result += np.count_nonzero(hot_label_np, axis=(0, 1))
+        return result
 
+
+class VOC2012DividedDataset(Dataset):
+    _dir = "/home/postech2/irn/VOCdevkit/VOC2012/Divided"
+
+    def __init__(self, transform: typing.Callable) -> None:
+        super().__init__()
+        self.transform = transform
+        self.images_filename = glob.glob(path.join(self._dir, "*_img.npy"))
+
+    def __getitem__(self, index):
+        image_filename = self.images_filename[index]
+        label_filename = self._get_label_filename(image_filename)
+
+        image = np.load(image_filename)
+        hot_label = np.load(label_filename)
+        unique_label = hot_to_unique(hot_label, 20)
+
+        if self.transform != None:
+            image = self.transform(image)
+        
+        return image, hot_label, unique_label
+    
+    def _get_label_filename(self, image_filename):
+        _, basename = path.split(image_filename)
+        basename, _ = path.splitext(basename)
+        return path.join(self._dir, basename.split("_img")[0] + "_label.npy")
+    
+    def __len__(self):
+        return len(self.images_filename)
     
 
 # Converts 2d array to 3d array
@@ -146,6 +186,16 @@ def array_to_divided_unique_2d(
             if uniques.shape[0] < num_classes:
                 uniques = np.hstack((uniques, np.full((num_classes - uniques.shape[0]), -1, dtype=np.int32)))
             result[i, j] = uniques
+    return result
+
+def hot_to_unique(
+    arr: np.ndarray,
+    num_classes: int, 
+) -> np.ndarray:
+    result = np.full((num_classes, ), -1, dtype=np.int64)
+    (uniques, ) = np.nonzero(arr)
+    if uniques.shape[0] > 0:
+        result[:uniques.shape[0]]
     return result
 
 # Converts 2d array to 3d array

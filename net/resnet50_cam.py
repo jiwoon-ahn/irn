@@ -20,8 +20,8 @@ class Net(nn.Module):
 
         self.classifier = nn.Conv2d(2048, 20, 1, bias=False)
 
-        self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4])
-        self.newly_added = nn.ModuleList([self.classifier])
+        self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3])
+        self.newly_added = nn.ModuleList([self.stage4, self.classifier])
 
     def forward(self, x):
 
@@ -34,11 +34,9 @@ class Net(nn.Module):
         x = torchutils.gap2d(x, keepdims=True)
         x = self.classifier(x)
         x = x.view(-1, 20)
-        x = torch.sigmoid(x)
         return x
 
     def train(self, mode=True):
-        super().train(mode)
         for p in self.resnet50.conv1.parameters():
             p.requires_grad = False
         for p in self.resnet50.bn1.parameters():
@@ -46,7 +44,7 @@ class Net(nn.Module):
         return self
 
     def trainable_parameters(self):
-        return [p for p in self.backbone.parameters() if p.requires_grad], [p for p in self.backbone.parameters() if p.requires_grad]
+        return [p for p in self.backbone.parameters() if p.requires_grad], [p for p in self.newly_added.parameters() if p.requires_grad]
 
 
 class CAM(Net):

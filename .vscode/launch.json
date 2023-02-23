@@ -9,6 +9,11 @@
             "args": [
                 "--voc12_root=VOCdevkit/VOC2012",
                 "--train_cam",
+                "--cam_learning_rate=0.1",
+                "--cam_batch_size=64",
+                "--cam_crop_size=224",
+                "--patch_size=256",
+                "--cam_num_epoches=10"
                 // "--eval_cam",
                 // "--make_cam",
             ],

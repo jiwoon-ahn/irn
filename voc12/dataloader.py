@@ -8,6 +8,8 @@ import typing
 from misc import imutils
 from collections import namedtuple
 
+from cityscapes.dataloader import hot_to_unique
+
 IMG_FOLDER_NAME = "JPEGImages"
 ANNOT_FOLDER_NAME = "Annotations"
 DIVIDED_FOLDER_NAME = "Divided"
@@ -46,7 +48,13 @@ def do_overlap(xmin1, ymin1, xmax1, ymax1, xmin2, ymin2, xmax2, ymax2):
  
     return True
 
-def save_divided_image_and_label_from_xml(img_name, divide_factor, voc12_root):
+def intf(s: str) -> int:
+    try:
+        return int(s)
+    except ValueError:
+        return int(float(s))
+
+def save_divided_image_and_label_from_xml(img_name, divide_size, voc12_root):
     from xml.dom import minidom
     from PIL import Image
 
@@ -54,30 +62,30 @@ def save_divided_image_and_label_from_xml(img_name, divide_factor, voc12_root):
     arr = np.array(im)
     dom = minidom.parse(os.path.join(voc12_root, ANNOT_FOLDER_NAME, decode_int_filename(img_name) + '.xml'))
     object_list = dom.getElementsByTagName('object')
-    width = int(dom.getElementsByTagName('width')[0].firstChild.data)
-    height = int(dom.getElementsByTagName('height')[0].firstChild.data)
+    width = intf(dom.getElementsByTagName('width')[0].firstChild.data)
+    height = intf(dom.getElementsByTagName('height')[0].firstChild.data)
     
     SegObj = namedtuple('SegObj', ["name", "xmin", "ymin", "xmax", "ymax"])
 
     SegObj_list: typing.List[SegObj] = []
     for object in object_list:
         cat_name = object.getElementsByTagName("name")[0].firstChild.data
-        xmin = int(object.getElementsByTagName("xmin")[0].firstChild.data)
-        ymin = int(object.getElementsByTagName("ymin")[0].firstChild.data)
-        xmax = int(object.getElementsByTagName("xmax")[0].firstChild.data)
-        ymax = int(object.getElementsByTagName("ymax")[0].firstChild.data)
+        xmin = intf(object.getElementsByTagName("xmin")[0].firstChild.data)
+        ymin = intf(object.getElementsByTagName("ymin")[0].firstChild.data)
+        xmax = intf(object.getElementsByTagName("xmax")[0].firstChild.data)
+        ymax = intf(object.getElementsByTagName("ymax")[0].firstChild.data)
         seg = SegObj(cat_name, xmin, ymin, xmax, ymax)
         SegObj_list.append(seg)
     
-    divided_width = width // divide_factor
-    divided_height = height // divide_factor
+    width_divide_factor = width // divide_size
+    height_divided_factor = height // divide_size
 
-    for i in range(divide_factor):
-        for j in range(divide_factor):
-            r = i * divided_height
-            c = j * divided_width
-            r_end = min(height - 1, r + divided_height)
-            c_end = min(width - 1, c + divided_width)
+    for i in range(height_divided_factor):
+        r = i * divide_size
+        r_end = min(height - 1, r + divide_size)
+        for j in range(width_divide_factor):
+            c = j * divide_size
+            c_end = min(width - 1, c + divide_size)
             result = arr[r:r_end, c:c_end]
             
             multi_cls_label = np.zeros((N_CAT), np.float32)
@@ -87,7 +95,7 @@ def save_divided_image_and_label_from_xml(img_name, divide_factor, voc12_root):
                     if obj.name in CAT_LIST:
                         cat_num = CAT_NAME_TO_NUM[obj.name]
                         multi_cls_label[cat_num] = 1.0
-            save_file_name = f"{decode_int_filename(img_name)}_{divide_factor}_{i}_{j}"
+            save_file_name = f"{decode_int_filename(img_name)}_{divide_size}_{i}_{j}"
             np.save(os.path.join(voc12_root, DIVIDED_FOLDER_NAME, f"{save_file_name}_img"), result)
             np.save(os.path.join(voc12_root, DIVIDED_FOLDER_NAME, f"{save_file_name}_label"), multi_cls_label)
 
@@ -265,13 +273,14 @@ class VOC12ClassificationDividedDataset(VOC12ImageDataset):
         super().__init__(img_name_list_path, voc12_root,
                  resize_long, rescale, img_normal, hor_flip,
                  crop_size, crop_method)
-        self.label_list = load_divided_image_label_list_from_npy(self.img_name_list, voc12_root)
+        self.label_list = load_image_label_list_from_npy(self.img_name_list)
 
     def __getitem__(self, idx):
         out = super().__getitem__(idx)
+
         out['label'] = torch.from_numpy(self.label_list[idx])
 
-        return out
+        return out['img'], out['label'], hot_to_unique(self.label_list[idx], 20)
 
 class VOC12ClassificationDatasetMSF(VOC12ClassificationDataset):
 
