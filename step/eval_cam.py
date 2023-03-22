@@ -1,29 +1,40 @@
 
 import numpy as np
 import os
-from chainercv.datasets import CityscapesSemanticSegmentationDataset
-from chainercv.evaluations import calc_semantic_segmentation_confusion
+import cityscapes.divided_dataset as cityscapes
+from torchvision.transforms import Compose, ToTensor, Resize
+from ignite.metrics import ConfusionMatrix, IoU, mIoU, Precision
+from torchvision.transforms.functional import resize, InterpolationMode
+import torch
+from torch import nn
+from tqdm import tqdm
+from os import path
 
 def run(args):
-    dataset = CityscapesSemanticSegmentationDataset(split=args.chainer_eval_set, data_dir="/home/postech2/datasets/cityscapes")
-    labels = [dataset.get_example_by_keys(i, (1,))[0] for i in range(len(dataset))]
+    dataset = cityscapes.CityScapesDividedDataset(divide=cityscapes.Divide.Test, patch_size=args.patch_size, transform=Compose([ToTensor(), Resize((args.cam_crop_size, args.cam_crop_size)),]))
 
-    preds = []
-    for id in dataset.ids:
-        cam_dict = np.load(os.path.join(args.cam_out_dir, id + '.npy'), allow_pickle=True).item()
-        cams = cam_dict['high_res']
-        cams = np.pad(cams, ((1, 0), (0, 0), (0, 0)), mode='constant', constant_values=args.cam_eval_thres)
-        keys = np.pad(cam_dict['keys'] + 1, (1, 0), mode='constant')
-        cls_labels = np.argmax(cams, axis=0)
-        cls_labels = keys[cls_labels]
-        preds.append(cls_labels.copy())
+    confusion = ConfusionMatrix(20)
+    precision = Precision(is_multilabel=True)
+    micro_precision = Precision(is_multilabel=True, average="micro")
+    macro_precision = Precision(is_multilabel=True, average="macro")
 
-    confusion = calc_semantic_segmentation_confusion(preds, labels)
+    for (_, _, _, basename, row_index, col_index, sem_seg_label) in (pbar := tqdm(dataset)):
+        sem_seg_label = resize(torch.tensor(sem_seg_label, dtype=torch.long).unsqueeze(0), [args.cam_crop_size, args.cam_crop_size], InterpolationMode.NEAREST).squeeze()
+        basename = path.splitext(basename)[0]
+        filename_prefix = os.path.join(args.cam_out_dir, f'{basename}_{row_index}_{col_index}')
 
-    gtj = confusion.sum(axis=1)
-    resj = confusion.sum(axis=0)
-    gtjresj = np.diag(confusion)
-    denominator = gtj + resj - gtjresj
-    iou = gtjresj / denominator
-
-    print({'iou': iou, 'miou': np.nanmean(iou)})
+        # np.load(filename_prefix + '_strided.npy')
+        cams = torch.tensor(np.load(filename_prefix + '_highres.npy').squeeze(0)).moveaxis(0, -1)
+        keys = torch.tensor(np.load(filename_prefix + '_valid_cat.npy'))
+        # cams = np.pad(cams, ((1, 0), (0, 0), (0, 0)), mode='constant', constant_values=args.cam_eval_thres)
+        cls_labels = torch.zeros((cams.shape[0], cams.shape[1], 20), dtype=torch.int8)
+        cls_labels[:, :, keys] = (cams > args.cam_eval_thres).to(dtype=torch.int8)
+        # cls_labels = np.argmax(cams, axis=0)
+        # cls_labels = keys[cls_labels]
+        # cls_labels[cls_labels > 19] = 19
+        sem_seg_label = nn.functional.one_hot(sem_seg_label, 20)
+        precision.update((cls_labels.flatten(start_dim=0, end_dim=1), sem_seg_label.flatten(start_dim=0, end_dim=1)))
+        micro_precision.update((cls_labels.flatten(start_dim=0, end_dim=1), sem_seg_label.flatten(start_dim=0, end_dim=1)))
+        macro_precision.update((cls_labels.flatten(start_dim=0, end_dim=1), sem_seg_label.flatten(start_dim=0, end_dim=1)))
+    
+    print({'micro_precision': micro_precision.compute(), 'macro_precision': macro_precision.compute()})

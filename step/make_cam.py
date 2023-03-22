@@ -3,6 +3,7 @@ from torch import multiprocessing, cuda
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from torch.backends import cudnn
+cudnn.enabled = True
 
 import numpy as np
 import importlib
@@ -10,102 +11,70 @@ import os
 import wandb
 
 from cityscapes.dataset import Cityscapes, MultipleScalesTranform
+from cityscapes.divided_dataset import CityScapesDividedDataset, Divide
+import cityscapesscripts.helpers.labels as labels
 from torchvision.transforms import Compose, ToTensor, Resize, ToPILImage, Lambda, PILToTensor
 from misc import torchutils, imutils
 
-cudnn.enabled = True
 
-def _work(process_id, model, dataset, args):
+from tqdm import tqdm
 
-    user = "postech-cv"
-    project = "irn-cityscapes"
-    display_name = "make_cam"
+from functools import partial
+from tqdm.contrib.concurrent import process_map
 
-    wandb.init(
-        entity=user,
-        project=project,
-        name=display_name,
-        config={
-            "cam": {
-                "network": args.cam_network,
-                "crop_size": args.cam_crop_size,
-                "batch_size": args.cam_batch_size,
-                "num_epoches": args.cam_num_epoches,
-                "learning_rate": args.cam_learning_rate,
-                "weight_decay": args.cam_weight_decay,
-                "eval_thres": args.cam_eval_thres,
-                "scales": args.cam_scales,
-                "patch_size": args.patch_size,
-            }
-        }
-    )
+import os.path as path
 
-    databin = dataset[process_id]
-    n_gpus = torch.cuda.device_count()
-    data_loader = DataLoader(databin, shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
 
-    with torch.no_grad(), cuda.device(process_id):
+def _work(model, dataset, args):
 
-        model.cuda()
-        model.eval()
+    data_loader = DataLoader(dataset, batch_size=32, shuffle=False, num_workers=args.num_workers, pin_memory=True)
 
-        for iter, (image, label, img_name) in enumerate(data_loader):
-            size = (256, 512)
+    with torch.no_grad():
+
+        for i, (images, hot_label, _, basename, row_index, col_index, _) in enumerate(tqdm(data_loader)):
+            size = (args.cam_crop_size, args.cam_crop_size)
             strided_size = imutils.get_strided_size(size, 4)
             strided_up_size = imutils.get_strided_up_size(size, 16)
+            num_inputs = images[0].shape[0]
 
-            outputs = [model(img[0].cuda(non_blocking=True))
-                       for img in image]
+            outputs = []
+            strided_cam = torch.zeros(num_inputs, 20, strided_size[0], strided_size[1], device='cuda')
+            highres_cam = torch.zeros(num_inputs, 20, strided_up_size[0], strided_up_size[1], device='cuda')
+            for img in images:
+                output = model(img.cuda())
+                output = output.reshape(num_inputs, 20, output.shape[-2], output.shape[-1])
+                strided_cam += F.interpolate(output, strided_size, mode='bilinear', align_corners=False)
+                highres_cam += F.interpolate(output, strided_up_size, mode='bilinear', align_corners=False)
+                outputs.append(output)
+            
+            strided_cam /= (F.adaptive_max_pool2d(strided_cam.flatten(start_dim=0, end_dim=1), (1, 1)) + 1e-5).unflatten(0, (-1, 20))
+            highres_cam /= (F.adaptive_max_pool2d(highres_cam.flatten(start_dim=0, end_dim=1), (1, 1)) + 1e-5).unflatten(0, (-1, 20))
 
-            strided_cam = torch.stack(
-                [F.interpolate(torch.unsqueeze(o, 0), strided_size, mode='bilinear', align_corners=False).squeeze(0) for o
-                 in outputs], 0)
-            strided_cam = torch.sum(strided_cam, 0)
-            wandb.log({
-                "strided cam": wandb.Image(ToPILImage()(strided_cam))
-            })
+            for j in range(num_inputs):
+                valid_cat = torch.nonzero(hot_label[j]).unique()
+                strided_cam__ = strided_cam[j, valid_cat]
+                highres_cam__ = highres_cam[j, valid_cat]
 
-            highres_cam = torch.stack(
-                [F.interpolate(torch.unsqueeze(o, 1), strided_up_size, mode='bilinear', align_corners=False).squeeze(0) for o
-                 in outputs], 0)
-            highres_cam = torch.sum(highres_cam, 0)[:, 0, :size[0], :size[1]]
-
-            valid_cat = torch.nonzero(label)[:, 0]
-
-            strided_cam = strided_cam[valid_cat]
-            strided_cam /= F.adaptive_max_pool2d(strided_cam, (1, 1)) + 1e-5
-
-            highres_cam = highres_cam[valid_cat]
-            highres_cam /= F.adaptive_max_pool2d(highres_cam, (1, 1)) + 1e-5
-
-            # save cams
-            np.save(os.path.join(args.cam_out_dir, img_name + '.npy'),
-                    {"keys": valid_cat, "cam": strided_cam.cpu(), "high_res": highres_cam.cpu().numpy()})
-
-            if process_id == n_gpus - 1 and iter % (len(databin) // 20) == 0:
-                print("%d " % ((5*iter+1)//(len(databin) // 20)), end='')
-
+                basename__ = basename[j]
+                basename__ = path.splitext(basename__)[0]
+                # save cams
+                filename_prefix = os.path.join(args.cam_out_dir, f'{basename__}_{row_index[j].item()}_{col_index[j].item()}')
+                np.save(filename_prefix + '_strided.npy', strided_cam__.cpu().numpy())
+                np.save(filename_prefix + '_highres.npy', highres_cam__.cpu().numpy())
+                np.save(filename_prefix + '_valid_cat.npy', valid_cat.cpu().numpy())
 
 def run(args):
     model = getattr(importlib.import_module(args.cam_network), 'CAM')()
-    model.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
+    model.load_state_dict(torch.load("/home/postech2/irn/wandb/run-20230223_211046-jfnt9scc/files/sess/res50_cam.pth.pth"), strict=True)
+    model = torch.nn.DataParallel(model).cuda()
     model.eval()
 
-    n_gpus = torch.cuda.device_count()
-
-    dataset = Cityscapes(
-        "/home/postech2/datasets/cityscapes", 
-        split='val', 
-        mode='fine',
-        target_type='semantic', 
-        transform=Compose([ToTensor(), Resize((128, 256)), MultipleScalesTranform(args.cam_scales)]), 
-        target_transform=Compose([PILToTensor(), Resize(256)])
+    dataset =  CityScapesDividedDataset(
+        divide=Divide.Val,
+        patch_size=args.patch_size,
+        transform=Compose([ToTensor(), Resize((args.cam_crop_size, args.cam_crop_size)), MultipleScalesTranform(args.cam_scales)])
     )
-    dataset = torchutils.split_dataset(dataset, n_gpus)
 
-    print('[ ', end='')
-    _work(0, model, dataset, args)
-    # multiprocessing.spawn(_work, nprocs=n_gpus, args=(model, dataset, args), join=True)
-    print(']')
+    _work(model, dataset, args)
 
     torch.cuda.empty_cache()

@@ -237,9 +237,9 @@ class TorchvisionNormalize():
         imgarr = img
         proc_img = torch.empty_like(imgarr, dtype=torch.float32)
 
-        proc_img[..., 0] = (imgarr[..., 0] / 255. - self.mean[0]) / self.std[0]
-        proc_img[..., 1] = (imgarr[..., 1] / 255. - self.mean[1]) / self.std[1]
-        proc_img[..., 2] = (imgarr[..., 2] / 255. - self.mean[2]) / self.std[2]
+        proc_img[0] = (imgarr[0] / 255. - self.mean[0]) / self.std[0]
+        proc_img[1] = (imgarr[1] / 255. - self.mean[1]) / self.std[1]
+        proc_img[2] = (imgarr[2] / 255. - self.mean[2]) / self.std[2]
 
         return proc_img
 
@@ -257,7 +257,7 @@ class MultipleScalesTranform:
             else:
                 s_img = imutils.tensor_rescale(pic, s, order=3)
             s_img = self.img_normal(s_img)
-            ms_img_list.append(torch.stack([s_img, s_img.flip(-1)], axis=0))
+            ms_img_list.append(s_img)
         return ms_img_list
 
     def __repr__(self) -> str:

@@ -9,7 +9,7 @@ from ignite.metrics import Average, Precision
 
 from torchvision import transforms
 
-import cityscapes.dataloader
+import cityscapes.divided_dataset
 from tqdm import tqdm
 from net.resnet50_cam import Net
 import typing
@@ -17,6 +17,7 @@ import typing
 from voc12.dataloader import CAT_LIST, VOC12ClassificationDividedDataset
 
 import wandb
+
 
 device = torch.device("cuda")
 
@@ -28,7 +29,6 @@ def thresholded_output_transform(output) -> typing.Tuple[torch.Tensor, torch.Ten
 
 def train(model, data_loader, optimizer: optim.Optimizer, scheduler: optim.lr_scheduler._LRScheduler, criterion, ep, cam_num_epochs):
     model.train()
-    iters = len(data_loader)
     pbar = tqdm(data_loader, desc=f'training, Epoch {ep+1}/{cam_num_epochs}')
 
     precision = Precision(is_multilabel=True)
@@ -41,7 +41,7 @@ def train(model, data_loader, optimizer: optim.Optimizer, scheduler: optim.lr_sc
     lr_metric = Average(device=torch.device("cuda"))
     loss_metric = Average(device=torch.device("cuda"))
 
-    for i, (img, hot_label, unique_label) in enumerate(pbar):
+    for i, (img, hot_label, unique_label, _, _, _, _) in enumerate(pbar):
         img = img.cuda(non_blocking=True)
         hot_label = hot_label.cuda(non_blocking=True)
         unique_label = unique_label.cuda(non_blocking=True)
@@ -219,7 +219,7 @@ def save_model(model, savefile_name):
 def get_cityscapes_dataloders(patch_size, batch_size, num_workers, crop_size):
     train_transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.RandomResizedCrop(crop_size),
+        transforms.RandomResizedCrop(crop_size), # 넣었다 뺐다
         transforms.RandomHorizontalFlip(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
@@ -232,13 +232,13 @@ def get_cityscapes_dataloders(patch_size, batch_size, num_workers, crop_size):
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
-    train_dataset = cityscapes.dataloader.CityScapesDividedDataset(
-        cityscapes.dataloader.Divide.Train,
+    train_dataset = cityscapes.divided_dataset.CityScapesDividedDataset(
+        cityscapes.divided_dataset.Divide.Train,
         int(patch_size),
         transform=train_transform
     )
-    val_dataset = cityscapes.dataloader.CityScapesDividedDataset(
-        cityscapes.dataloader.Divide.Val, 
+    val_dataset = cityscapes.divided_dataset.CityScapesDividedDataset(
+        cityscapes.divided_dataset.Divide.Val, 
         int(patch_size), 
         transform=val_transform
     )
