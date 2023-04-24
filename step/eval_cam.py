@@ -1,40 +1,54 @@
 
-import numpy as np
-import os
 import cityscapes.divided_dataset as cityscapes
 from torchvision.transforms import Compose, ToTensor, Resize
-from ignite.metrics import ConfusionMatrix, IoU, mIoU, Precision
 from torchvision.transforms.functional import resize, InterpolationMode
-import torch
 from torch import nn
-from tqdm import tqdm
-from os import path
+import torch
+import typing
+import lightning
+from lightning.pytorch.utilities import types
+from lightning.pytorch.loggers import WandbLogger
+from torchmetrics.classification import MultilabelPrecision
+
+class Module(lightning.LightningModule):
+    def __init__(self, threshold: float, cam_crop_size: int = 256):
+        super().__init__()
+        self.cam_crop_size = cam_crop_size
+        self.micro_precision = MultilabelPrecision(num_labels=20, average='micro', threshold=threshold)
+        self.macro_precision = MultilabelPrecision(num_labels=20, average='macro', threshold=threshold)
+
+    def test_step(self, batch, _) -> typing.Optional[types.STEP_OUTPUT]:
+        cams_sparse, sem_seg_label = batch
+
+        cams_sparse = cams_sparse.moveaxis(1, -1).flatten(0, 2)
+
+        sem_seg_label = sem_seg_label.to(dtype=torch.int64)
+        sem_seg_label = resize(sem_seg_label, [self.cam_crop_size, self.cam_crop_size], InterpolationMode.NEAREST)
+        sem_seg_label = sem_seg_label.flatten()
+        sem_seg_label = nn.functional.one_hot(sem_seg_label, num_classes=20)
+        
+        self.micro_precision(cams_sparse, sem_seg_label)
+        self.macro_precision(cams_sparse, sem_seg_label)
+        self.log_dict({'running_micro_precision': self.micro_precision, 'running_macro_precision': self.macro_precision})
+
+    def on_test_epoch_end(self):
+        self.log_dict({'micro_precision': self.micro_precision.compute(), 'macro_precision': self.macro_precision.compute()})
+
+    def test_dataloader(self) -> types.EVAL_DATALOADERS:
+        return super().test_dataloader()
 
 def run(args):
-    dataset = cityscapes.CityScapesDividedDataset(divide=cityscapes.Divide.Test, patch_size=args.patch_size, transform=Compose([ToTensor(), Resize((args.cam_crop_size, args.cam_crop_size)),]))
-
-    confusion = ConfusionMatrix(20)
-    precision = Precision(is_multilabel=True)
-    micro_precision = Precision(is_multilabel=True, average="micro")
-    macro_precision = Precision(is_multilabel=True, average="macro")
-
-    for (_, _, _, basename, row_index, col_index, sem_seg_label) in (pbar := tqdm(dataset)):
-        sem_seg_label = resize(torch.tensor(sem_seg_label, dtype=torch.long).unsqueeze(0), [args.cam_crop_size, args.cam_crop_size], InterpolationMode.NEAREST).squeeze()
-        basename = path.splitext(basename)[0]
-        filename_prefix = os.path.join(args.cam_out_dir, f'{basename}_{row_index}_{col_index}')
-
-        # np.load(filename_prefix + '_strided.npy')
-        cams = torch.tensor(np.load(filename_prefix + '_highres.npy').squeeze(0)).moveaxis(0, -1)
-        keys = torch.tensor(np.load(filename_prefix + '_valid_cat.npy'))
-        # cams = np.pad(cams, ((1, 0), (0, 0), (0, 0)), mode='constant', constant_values=args.cam_eval_thres)
-        cls_labels = torch.zeros((cams.shape[0], cams.shape[1], 20), dtype=torch.int8)
-        cls_labels[:, :, keys] = (cams > args.cam_eval_thres).to(dtype=torch.int8)
-        # cls_labels = np.argmax(cams, axis=0)
-        # cls_labels = keys[cls_labels]
-        # cls_labels[cls_labels > 19] = 19
-        sem_seg_label = nn.functional.one_hot(sem_seg_label, 20)
-        precision.update((cls_labels.flatten(start_dim=0, end_dim=1), sem_seg_label.flatten(start_dim=0, end_dim=1)))
-        micro_precision.update((cls_labels.flatten(start_dim=0, end_dim=1), sem_seg_label.flatten(start_dim=0, end_dim=1)))
-        macro_precision.update((cls_labels.flatten(start_dim=0, end_dim=1), sem_seg_label.flatten(start_dim=0, end_dim=1)))
+    logger = WandbLogger(project="cam", name="cam_eval")
+    dataset = cityscapes.CityScapesDividedPTHCAMDataset(
+        divide=cityscapes.Divide.Val,
+        patch_size=args.patch_size,
+        cam_out_dir=args.cam_out_dir,
+        cam_size=args.cam_crop_size,
+        transform=Compose([ToTensor(), Resize((args.cam_crop_size, args.cam_crop_size), InterpolationMode.NEAREST),])
+    )
+    lightning_data_module = lightning.LightningDataModule.from_datasets(train_dataset=dataset, val_dataset=dataset, test_dataset=dataset, batch_size=128, num_workers=args.num_workers)
     
-    print({'micro_precision': micro_precision.compute(), 'macro_precision': macro_precision.compute()})
+    model = Module(args.cam_eval_thres, args.cam_crop_size)
+
+    trainer = lightning.Trainer(devices=1, num_nodes=1, limit_test_batches=3, logger=logger)
+    trainer.test(model=model, datamodule=lightning_data_module)

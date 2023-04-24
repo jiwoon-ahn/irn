@@ -14,10 +14,11 @@ from tqdm import tqdm
 from net.resnet50_cam import Net
 import typing
 
-from voc12.dataloader import CAT_LIST, VOC12ClassificationDividedDataset
+from voc12.dataloader import CAT_LIST
 
 import wandb
 
+import lightning
 
 device = torch.device("cuda")
 
@@ -234,49 +235,15 @@ def get_cityscapes_dataloders(patch_size, batch_size, num_workers, crop_size):
 
     train_dataset = cityscapes.divided_dataset.CityScapesDividedDataset(
         cityscapes.divided_dataset.Divide.Train,
+        ["img", "hot_label"],
         int(patch_size),
         transform=train_transform
     )
     val_dataset = cityscapes.divided_dataset.CityScapesDividedDataset(
         cityscapes.divided_dataset.Divide.Val, 
+        ["img", "hot_label", "unique_label"],
         int(patch_size), 
         transform=val_transform
     )
 
-
-    train_data_loader = DataLoader(train_dataset, batch_size=batch_size,
-                                   shuffle=False, num_workers=num_workers, pin_memory=True, drop_last=True)
-
-    val_data_loader = DataLoader(val_dataset, batch_size=batch_size,
-                                 shuffle=False, num_workers=num_workers, pin_memory=True, drop_last=True)
-                                 
-    return train_data_loader, val_data_loader
-
-def get_voc2012_dataloders(batch_size, num_workers, crop_size):
-    val_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Resize(crop_size + 10),
-        transforms.CenterCrop(crop_size),
-        transforms.RandomHorizontalFlip(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-
-    dataset = VOC12ClassificationDividedDataset("/home/postech2/irn/voc12/train_aug.txt", 
-        voc12_root="/home/postech2/irn/VOCdevkit/VOC2012",
-        resize_long=(320, 640), hor_flip=True,
-        crop_size=512, crop_method="random")
-
-    dataset_size = len(dataset)
-    train_size = int(dataset_size * 0.8)
-    validation_size = dataset_size - train_size
-
-    train_dataset, validation_dataset = random_split(dataset, [train_size, validation_size])
-
-    train_data_loader = DataLoader(train_dataset, batch_size=batch_size,
-                                   shuffle=False, num_workers=num_workers, pin_memory=True, drop_last=True)
-
-    val_data_loader = DataLoader(validation_dataset, batch_size=batch_size,
-                                 shuffle=False, num_workers=num_workers, pin_memory=True, drop_last=True)
-                                 
-    return train_data_loader, val_data_loader
-
+    return lightning.LightningDataModule.from_datasets(train_dataset, val_dataset, batch_size=batch_size, num_workers=num_workers)

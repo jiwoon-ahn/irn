@@ -83,7 +83,7 @@ class Timer:
         return out
 
 
-def to_one_hot(sparse_integers, maximum_val=None, dtype=np.bool):
+def to_one_hot(sparse_integers, maximum_val=None, dtype=np.bool_):
 
     if maximum_val is None:
         maximum_val = np.max(sparse_integers) + 1

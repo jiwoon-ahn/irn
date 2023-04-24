@@ -3,9 +3,14 @@ from os import path
 from functools import lru_cache
 import cv2
 
-def load_memoized_labels(cityscapes_dir, dir_str, patch_size, row_index, col_index, image_filename):
+def load_memoized_labels(cityscapes_dir, dir_str, patch_size, row_index, col_index, image_filename, datatype:list[str]):
     label_path_before_postfix = get_label_path_before_postfix(cityscapes_dir, dir_str, image_filename)
     prefix = f"{label_path_before_postfix}_{patch_size}_{row_index}_{col_index}"
+    result = []
+    for d in datatype:
+        d_path = prefix + f"_{d}.npy"
+        result.append(np.load(d_path, allow_pickle=True))
+    return result
     img_path = prefix + "_img.npy"
     hot_label_path = prefix + "_hot_label.npy"
     unique_label_path = prefix + "_unique_label.npy"
