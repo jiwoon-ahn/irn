@@ -9,9 +9,10 @@ cython = "*"
 imageio = ">=2.5.0"
 scikit-image = ">=0.15.0"
 chainercv = ">=0.12.0"
-pydenscrf = {git = "https://github.com/lucasb-eyer/pydensecrf.git"}
 torch = ">=1.1.0"
 torchvision = "*"
+opencv-python = "*"
+pydensecrf = {git = "https://github.com/lucasb-eyer/pydensecrf.git"}
 
 [dev-packages]
 
