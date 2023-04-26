@@ -13,6 +13,10 @@ torch = ">=1.1.0"
 torchvision = "*"
 opencv-python = "*"
 pydensecrf = {git = "https://github.com/lucasb-eyer/pydensecrf.git"}
+tqdm = "*"
+pytorch-lightning = "*"
+wandb = "*"
+cityscapesscripts = "*"
 
 [dev-packages]
 

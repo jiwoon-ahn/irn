@@ -10,7 +10,7 @@ import torch
 from torch import nn
 from torchvision.transforms import Resize, InterpolationMode
 import cv2
-import lightning
+import pytorch_lightning as pl
 
 class Divide(Enum):
     Train = auto()
@@ -20,7 +20,8 @@ class Divide(Enum):
 class CityScapesDividedDataset(Dataset):
     _full_width = 2048
     _full_height = 1024
-    _cityscapes_dir = "/home/postech2/datasets/cityscapes"
+    _cityscapes_dir = "/Users/minsu/dataset/cityscapes"
+    _cityscapes_preprocessed_dir = "/Users/minsu//dataset/citiscape_preprocessed"
 
     def __init__(self, divide: Divide, datatype: list[str], patch_size: int, transform: typing.Optional[typing.Callable]) -> None:
         super().__init__()
@@ -68,7 +69,7 @@ class CityScapesDividedDataset(Dataset):
 class CityScapesDividedCAMDataset(Dataset):
     _full_width = 2048
     _full_height = 1024
-    _cityscapes_dir = "/home/postech2/datasets/cityscapes"
+    _cityscapes_dir = "/Users/minsu/dataset/cityscapes"
 
     def __init__(self, divide: Divide, patch_size: int, cam_out_dir: str, cam_eval_thres:float, cam_size:int, transform: typing.Union[typing.Callable ,None]) -> None:
         self._cam_out_dir = cam_out_dir
@@ -97,7 +98,7 @@ class CityScapesDividedCAMDataset(Dataset):
 class CityScapesDividedPTHCAMDataset(Dataset):
     _full_width = 2048
     _full_height = 1024
-    _cityscapes_dir = "/home/postech2/datasets/cityscapes"
+    _cityscapes_dir = "/Users/minsu/dataset/cityscapes"
 
     def __init__(self, divide: Divide, patch_size: int, cam_out_dir: str, cam_size:int, transform: typing.Union[typing.Callable ,None]) -> None:
         self._cam_out_dir = cam_out_dir

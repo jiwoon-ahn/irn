@@ -1,16 +1,15 @@
-
 import cityscapes.divided_dataset as cityscapes
 from torchvision.transforms import Compose, ToTensor, Resize
 from torchvision.transforms.functional import resize, InterpolationMode
 from torch import nn
 import torch
 import typing
-import lightning
-from lightning.pytorch.utilities import types
-from lightning.pytorch.loggers import WandbLogger
+import pytorch_lightning as pl
+from pytorch_lightning.utilities import types
+from pytorch_lightning.loggers.wandb import WandbLogger
 from torchmetrics.classification import MultilabelPrecision
 
-class Module(lightning.LightningModule):
+class Module(pl.LightningModule):
     def __init__(self, threshold: float, cam_crop_size: int = 256):
         super().__init__()
         self.cam_crop_size = cam_crop_size
@@ -46,9 +45,9 @@ def run(args):
         cam_size=args.cam_crop_size,
         transform=Compose([ToTensor(), Resize((args.cam_crop_size, args.cam_crop_size), InterpolationMode.NEAREST),])
     )
-    lightning_data_module = lightning.LightningDataModule.from_datasets(train_dataset=dataset, val_dataset=dataset, test_dataset=dataset, batch_size=128, num_workers=args.num_workers)
+    lightning_data_module = pl.LightningDataModule.from_datasets(train_dataset=dataset, val_dataset=dataset, test_dataset=dataset, batch_size=128, num_workers=args.num_workers)
     
     model = Module(args.cam_eval_thres, args.cam_crop_size)
 
-    trainer = lightning.Trainer(devices=1, num_nodes=1, limit_test_batches=3, logger=logger)
+    trainer = pl.Trainer(devices=1, num_nodes=1, limit_test_batches=3, logger=logger)
     trainer.test(model=model, datamodule=lightning_data_module)

@@ -10,7 +10,7 @@ if __name__ == '__main__':
     env_group = parser.add_argument_group("Environment")
     env_group.add_argument("--voc12_root", required=True, type=str,
                         help="Path to VOC 2012 Devkit, must contain ./JPEGImages as subdirectory.")
-    env_group.add_argument("--num_workers", default=min(32, os.cpu_count() + 4), type=int)
+    env_group.add_argument("--num_workers", default=min(32, os.cpu_count()), type=int)
 
     dataset_group = parser.add_argument_group("Dataset")
     dataset_group.add_argument("--train_list", default="voc12/train_aug.txt", type=str)
