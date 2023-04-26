@@ -81,7 +81,7 @@ if __name__ == '__main__':
     os.makedirs(args.ins_seg_out_dir, exist_ok=True)
 
     pyutils.Logger(args.log_name + '.log')
-    print(vars(args))
+    # print(vars(args))
 
     if False:
         import step.divide_to_patches
@@ -90,7 +90,6 @@ if __name__ == '__main__':
     if args.train_cam is True:
         import step.train_cam_grid
 
-        timer = pyutils.Timer('step.train_cam:')
         step.train_cam_grid.run(args)
 
     if args.make_cam is True:

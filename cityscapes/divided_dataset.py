@@ -12,6 +12,8 @@ from torchvision.transforms import Resize, InterpolationMode
 import cv2
 import pytorch_lightning as pl
 
+_cityscapes_dir = "/workspaces/datasets/cityscapes"
+
 class Divide(Enum):
     Train = auto()
     Val = auto()
@@ -20,8 +22,7 @@ class Divide(Enum):
 class CityScapesDividedDataset(Dataset):
     _full_width = 2048
     _full_height = 1024
-    _cityscapes_dir = "/Users/minsu/dataset/cityscapes"
-    _cityscapes_preprocessed_dir = "/Users/minsu//dataset/citiscape_preprocessed"
+    _cityscapes_dir = "/workspaces/datasets/cityscapes"
 
     def __init__(self, divide: Divide, datatype: list[str], patch_size: int, transform: typing.Optional[typing.Callable]) -> None:
         super().__init__()
@@ -38,11 +39,6 @@ class CityScapesDividedDataset(Dataset):
         elif divide == Divide.Val:
             self.dir_str = "val"
         self.images_filename = glob.glob(path.join(self._cityscapes_dir, "leftImg8bit", self.dir_str, "**", "*_leftImg8bit.png"), recursive=True)
-        
-        try:
-            self.__getitem__(0)
-        except:
-            divide_to_patches(self._cityscapes_dir, self.dir_str, self.patch_size)
 
 
     def __getitem__(self, index):
@@ -69,7 +65,7 @@ class CityScapesDividedDataset(Dataset):
 class CityScapesDividedCAMDataset(Dataset):
     _full_width = 2048
     _full_height = 1024
-    _cityscapes_dir = "/Users/minsu/dataset/cityscapes"
+    _cityscapes_dir = "/workspaces/datasets/cityscapes"
 
     def __init__(self, divide: Divide, patch_size: int, cam_out_dir: str, cam_eval_thres:float, cam_size:int, transform: typing.Union[typing.Callable ,None]) -> None:
         self._cam_out_dir = cam_out_dir
@@ -98,7 +94,7 @@ class CityScapesDividedCAMDataset(Dataset):
 class CityScapesDividedPTHCAMDataset(Dataset):
     _full_width = 2048
     _full_height = 1024
-    _cityscapes_dir = "/Users/minsu/dataset/cityscapes"
+    _cityscapes_dir = "/workspaces/datasets/cityscapes"
 
     def __init__(self, divide: Divide, patch_size: int, cam_out_dir: str, cam_size:int, transform: typing.Union[typing.Callable ,None]) -> None:
         self._cam_out_dir = cam_out_dir
