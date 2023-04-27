@@ -1,20 +1,6 @@
 
 import numpy as np
 import time
-import sys
-
-class Logger(object):
-    def __init__(self, outfile):
-        self.terminal = sys.stdout
-        self.log = open(outfile, "w")
-        sys.stdout = self
-
-    def write(self, message):
-        self.terminal.write(message)
-        self.log.write(message)
-
-    def flush(self):
-        self.terminal.flush()
 
 
 class AverageMeter:

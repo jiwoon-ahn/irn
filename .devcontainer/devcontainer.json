@@ -19,12 +19,18 @@
 		"all",
 		"--ipc",
 		"host"
-	]
+	],
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"GitHub.copilot",
+				"ms-azuretools.vscode-docker"
+			]
+		}
+	},
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	// "postCreateCommand": [
-	// 	"sh -c postcreate.sh"
-	// ]
+	"postCreateCommand": "bash /workspaces/irn/.devcontainer/postcreate.sh"
 	
 
 	// Configure tool-specific properties.

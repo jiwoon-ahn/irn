@@ -11,16 +11,6 @@ def load_memoized_labels(cityscapes_dir, dir_str, patch_size, row_index, col_ind
         d_path = prefix + f"_{d}.npy"
         result.append(np.load(d_path, allow_pickle=True))
     return result
-    img_path = prefix + "_img.npy"
-    hot_label_path = prefix + "_hot_label.npy"
-    unique_label_path = prefix + "_unique_label.npy"
-    sem_seg_label_path = prefix + "_sem_seg_label.npy"
-
-    image = np.load(img_path, allow_pickle=True)
-    hot_label = np.load(hot_label_path, allow_pickle=True)
-    unique_label = np.load(unique_label_path, allow_pickle=True)
-    sem_seg_label = np.load(sem_seg_label_path, allow_pickle=True)
-    return image,hot_label,unique_label,sem_seg_label
 
 @lru_cache(maxsize=32)
 def get_divided_image_labels(cityscapes_dir:str, dir_str:str, patch_size:int, image_filename: str):
@@ -128,7 +118,7 @@ def array_to_divided_unique_2d(
 
 def hot_to_unique(
     arr: np.ndarray,
-    num_classes: int, 
+    num_classes: int,
 ) -> np.ndarray:
     result = np.full((num_classes, ), -1, dtype=np.int64)
     (uniques, ) = np.nonzero(arr)

@@ -80,7 +80,6 @@ if __name__ == '__main__':
     os.makedirs(args.sem_seg_out_dir, exist_ok=True)
     os.makedirs(args.ins_seg_out_dir, exist_ok=True)
 
-    pyutils.Logger(args.log_name + '.log')
     # print(vars(args))
 
     if False:

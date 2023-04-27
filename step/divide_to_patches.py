@@ -25,6 +25,4 @@ def job(image_filename:str, cityscapes_dir:str, dir_str:str, patch_size:int):
 
 def divide_to_patches(cityscapes_dir, dir_str, patch_size):
     filename_list = glob.glob(path.join(cityscapes_dir, "leftImg8bit", dir_str, "**", "*_leftImg8bit.png"), recursive=True)
-    # for image in tqdm(filename_list):
-        # job(image, cityscapes_dir, dir_str, patch_size)
     process_map(partial(job, cityscapes_dir=cityscapes_dir, dir_str=dir_str, patch_size=patch_size), filename_list, max_workers=10, chunksize=32)

@@ -3,7 +3,7 @@ name: irn-sweep
 project: irn-patch
 method: bayes
 metric:
-  name: cam.val.macro_avg_precision
+  name: val_macro_precision
   goal: maximize
 parameters:
   patch_size:

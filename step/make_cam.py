@@ -1,74 +1,31 @@
 import torch
-from torch import multiprocessing, cuda
-from torch.utils.data import DataLoader
-import torch.nn.functional as F
 from torch.backends import cudnn
+from torch import distributed
 cudnn.enabled = True
 
-import numpy as np
-import importlib
-import os
+from cityscapes.divided_datamodule import CityScapesDividedModule
+from net.resnet50_cam_lightning import CAM, FeatureExtractorFreezeUnfreeze
+
 import wandb
 
-from cityscapes.dataset import Cityscapes, MultipleScalesTranform
-from cityscapes.divided_dataset import CityScapesDividedDataset, Divide
-import cityscapesscripts.helpers.labels as labels
-from torchvision.transforms import Compose, ToTensor, Resize, ToPILImage, Lambda, PILToTensor
-from misc import torchutils, imutils
-
-
-from tqdm import tqdm
-
-from functools import partial
-from tqdm.contrib.concurrent import process_map
-
-import os.path as path
-
-
-def _work(model, dataset, args):
-
-    data_loader = DataLoader(dataset, batch_size=32, shuffle=False, num_workers=args.num_workers, pin_memory=True)
-
-    with torch.no_grad():
-
-        for basename, row_index, col_index, images in tqdm(data_loader):
-            size = (args.cam_crop_size, args.cam_crop_size)
-            # strided_size = imutils.get_strided_size(size, 4)
-            strided_up_size = imutils.get_strided_up_size(size, 16)
-            num_inputs = images[0].shape[0]
-
-            # strided_cam = torch.zeros((num_inputs, 20) + strided_size, device='cuda')
-            highres_cam = torch.zeros((num_inputs, 20) + strided_up_size, device='cuda')
-            for img in images:
-                output = model(img.cuda())
-                # strided_cam += F.interpolate(output, strided_size, mode='bilinear', align_corners=False)
-                highres_cam += F.interpolate(output, strided_up_size, mode='bilinear', align_corners=False)
-            
-            # strided_cam /= (F.adaptive_max_pool2d(strided_cam.flatten(start_dim=0, end_dim=1), (1, 1)) + 1e-5).unflatten(0, (-1, 20))
-            highres_cam /= (F.adaptive_max_pool2d(highres_cam.flatten(start_dim=0, end_dim=1), (1, 1)) + 1e-5).unflatten(0, (-1, 20))
-
-            for j in range(num_inputs):
-                # strided_cam__ = strided_cam[j]
-                highres_cam__ = highres_cam[j].detach().cpu().numpy()
-                basename__ = path.splitext(basename[j])[0]
-
-                filename_prefix = os.path.join(args.cam_out_dir, f'{basename__}_{row_index[j].item()}_{col_index[j].item()}')
-                # torch.save(strided_cam__, filename_prefix + '_strided.pth')
-                np.save(filename_prefix + '_highres.npy', highres_cam__)
+import pytorch_lightning as pl
+from pytorch_lightning.loggers.wandb import WandbLogger
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.strategies.ddp import DDPStrategy
 
 def run(args):
-    model = getattr(importlib.import_module(args.cam_network), 'CAM')()
-    model.load_state_dict(torch.load("/home/postech2/irn/wandb/run-20230223_211046-jfnt9scc/files/sess/res50_cam.pth.pth"), strict=True)
-    model = torch.nn.DataParallel(model).cuda()
-    model.eval()
 
-    dataset =  CityScapesDividedDataset(
-        divide=Divide.Val,
-        datatype=["img"],
-        patch_size=args.patch_size,
-        transform=Compose([ToTensor(), Resize((args.cam_crop_size, args.cam_crop_size)), MultipleScalesTranform(args.cam_scales)])
-    )
+    crop_size = args.cam_crop_size
+    batch_size = args.cam_batch_size
+    learning_rate = args.cam_learning_rate
+    weight_decay = args.cam_weight_decay
+    patch_size = args.patch_size
+    
+    model = CAM(learning_rate, weight_decay, 0.5, args.cam_out_dir, crop_size)
+    datamodule = CityScapesDividedModule(batch_size, patch_size, crop_size, False, False, args.cam_crop_size, args.cam_scales, args.cam_out_dir)
 
-    _work(model, dataset, args)
-
-    torch.cuda.empty_cache()
+    logger = WandbLogger(project="irn-cityscapes", name="train_cam_grid_no_sigmoid")
+    logger.log_hyperparams(args)
+    
+    trainer = pl.Trainer(logger=logger,strategy=DDPStrategy(find_unused_parameters=True), limit_predict_batches=4)
+    trainer.predict(model, datamodule)
