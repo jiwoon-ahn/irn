@@ -3,9 +3,10 @@
 {
 	"name": "irn-python310",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/python:0-3.10",
+	"build": { "dockerfile": "Dockerfile" },
 	"features": {
-		"ghcr.io/devcontainers/features/nvidia-cuda:1": {}
+		"ghcr.io/devcontainers/features/nvidia-cuda:1": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {}
 	},
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
@@ -18,12 +19,12 @@
 		"all",
 		"--ipc",
 		"host"
-	],
+	]
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": [
-		"sh -c postcreate.sh"
-	]
+	// "postCreateCommand": [
+	// 	"sh -c postcreate.sh"
+	// ]
 	
 
 	// Configure tool-specific properties.
