@@ -197,3 +197,5 @@ poetry.toml
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,python
 wandb
 nohup.out
+lightning_logs
+models/train/*
