@@ -14,18 +14,18 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.strategies.ddp import DDPStrategy
 
 def run(args):
-
-    crop_size = args.cam_crop_size
-    batch_size = args.cam_batch_size
-    learning_rate = args.cam_learning_rate
-    weight_decay = args.cam_weight_decay
-    patch_size = args.patch_size
+    wandb.init(project="irn-cityscapes", name="train_cam_grid_no_sigmoid")
+    crop_size = wandb.config.cam_crop_size
+    batch_size = wandb.config.cam_batch_size
+    learning_rate = wandb.config.cam_learning_rate
+    weight_decay = wandb.config.cam_weight_decay
+    patch_size = wandb.config.patch_size
     
     model = CAM(learning_rate, weight_decay, 0.5, args.cam_out_dir, crop_size)
     datamodule = CityScapesDividedModule(batch_size, patch_size, crop_size, False, False, args.cam_crop_size, args.cam_scales, args.cam_out_dir)
 
-    logger = WandbLogger(project="irn-cityscapes", name="train_cam_grid_no_sigmoid")
+    logger = WandbLogger()
     logger.log_hyperparams(args)
     
-    trainer = pl.Trainer(logger=logger,strategy=DDPStrategy(find_unused_parameters=True), limit_predict_batches=4)
-    trainer.predict(model, datamodule)
+    trainer = pl.Trainer(logger=logger,strategy=DDPStrategy(find_unused_parameters=True))
+    trainer.predict(model, datamodule, ckpt_path="/workspaces/irn/models/train/epoch=8-val_loss=-0.23-val_macro_precision=0.59-val_micro_precision=0.84.ckpt")

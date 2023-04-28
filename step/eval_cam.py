@@ -20,5 +20,5 @@ def run(args):
     logger = WandbLogger(project="irn-cityscapes", name="train_cam_grid_no_sigmoid")
     logger.log_hyperparams(args)
     
-    trainer = pl.Trainer(devices=1, num_nodes=1, logger=logger, limit_test_batches=4)
+    trainer = pl.Trainer(devices=1, num_nodes=1, logger=logger)
     trainer.test(model, datamodule)
