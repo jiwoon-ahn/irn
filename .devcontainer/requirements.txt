@@ -1,0 +1,8 @@
+numpy
+cython
+imageio
+scikit-image
+wandb
+pytorch-lightning
+cityscapesscripts
+opencv-python

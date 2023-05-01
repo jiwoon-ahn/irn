@@ -34,7 +34,7 @@ pip install -r requirements.txt
 
 #### Run run_sample.py or make your own script
 ```
-python run_sample.py
+python run_sample.py --voc12_root=VOCdevkit/VOC2012 --num_workers=3 --make_cam
 ```
 * You can either mannually edit the file, or specify commandline arguments.
 

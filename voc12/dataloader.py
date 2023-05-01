@@ -4,10 +4,15 @@ import torch
 from torch.utils.data import Dataset
 import os.path
 import imageio
+import typing
 from misc import imutils
+from collections import namedtuple
+
+from cityscapes.dataloader import hot_to_unique
 
 IMG_FOLDER_NAME = "JPEGImages"
 ANNOT_FOLDER_NAME = "Annotations"
+DIVIDED_FOLDER_NAME = "Divided"
 IGNORE = 255
 
 CAT_LIST = ['aeroplane', 'bicycle', 'bird', 'boat',
@@ -26,6 +31,74 @@ cls_labels_dict = np.load('voc12/cls_labels.npy', allow_pickle=True).item()
 def decode_int_filename(int_filename):
     s = str(int(int_filename))
     return s[:4] + '_' + s[4:]
+
+def do_overlap(xmin1, ymin1, xmax1, ymax1, xmin2, ymin2, xmax2, ymax2):
+     
+    # if rectangle has area 0, no overlap
+    if xmin1 == xmax1 or ymin1 == ymax1 or xmax2 == xmin1 or ymin1 == ymax2:
+        return False
+     
+    # If one rectangle is on left side of other
+    if xmin1 > xmax2 or xmin2 > xmax1:
+        return False
+ 
+    # If one rectangle is above other
+    if ymin2 > ymax1 or ymin1 > ymax2:
+        return False
+ 
+    return True
+
+def intf(s: str) -> int:
+    try:
+        return int(s)
+    except ValueError:
+        return int(float(s))
+
+def save_divided_image_and_label_from_xml(img_name, divide_size, voc12_root):
+    from xml.dom import minidom
+    from PIL import Image
+
+    im = Image.open(get_img_path(img_name, voc12_root))
+    arr = np.array(im)
+    dom = minidom.parse(os.path.join(voc12_root, ANNOT_FOLDER_NAME, decode_int_filename(img_name) + '.xml'))
+    object_list = dom.getElementsByTagName('object')
+    width = intf(dom.getElementsByTagName('width')[0].firstChild.data)
+    height = intf(dom.getElementsByTagName('height')[0].firstChild.data)
+    
+    SegObj = namedtuple('SegObj', ["name", "xmin", "ymin", "xmax", "ymax"])
+
+    SegObj_list: typing.List[SegObj] = []
+    for object in object_list:
+        cat_name = object.getElementsByTagName("name")[0].firstChild.data
+        xmin = intf(object.getElementsByTagName("xmin")[0].firstChild.data)
+        ymin = intf(object.getElementsByTagName("ymin")[0].firstChild.data)
+        xmax = intf(object.getElementsByTagName("xmax")[0].firstChild.data)
+        ymax = intf(object.getElementsByTagName("ymax")[0].firstChild.data)
+        seg = SegObj(cat_name, xmin, ymin, xmax, ymax)
+        SegObj_list.append(seg)
+    
+    width_divide_factor = width // divide_size
+    height_divided_factor = height // divide_size
+
+    for i in range(height_divided_factor):
+        r = i * divide_size
+        r_end = min(height - 1, r + divide_size)
+        for j in range(width_divide_factor):
+            c = j * divide_size
+            c_end = min(width - 1, c + divide_size)
+            result = arr[r:r_end, c:c_end]
+            
+            multi_cls_label = np.zeros((N_CAT), np.float32)
+
+            for obj in SegObj_list:
+                if do_overlap(c, r, c_end, r_end, obj.xmin, obj.ymin, obj.xmax, obj.ymax):
+                    if obj.name in CAT_LIST:
+                        cat_num = CAT_NAME_TO_NUM[obj.name]
+                        multi_cls_label[cat_num] = 1.0
+            save_file_name = f"{decode_int_filename(img_name)}_{divide_size}_{i}_{j}"
+            np.save(os.path.join(voc12_root, DIVIDED_FOLDER_NAME, f"{save_file_name}_img"), result)
+            np.save(os.path.join(voc12_root, DIVIDED_FOLDER_NAME, f"{save_file_name}_label"), multi_cls_label)
+
 
 def load_image_label_from_xml(img_name, voc12_root):
     from xml.dom import minidom
@@ -50,6 +123,9 @@ def load_image_label_list_from_npy(img_name_list):
 
     return np.array([cls_labels_dict[img_name] for img_name in img_name_list])
 
+def load_divided_image_label_list_from_npy(img_name_list, voc12_root):
+    return np.array([np.load(os.path.join(voc12_root, DIVIDED_FOLDER_NAME, f"{decode_int_filename(img_name)}_2_0_0_label.npy")) for img_name in img_name_list])
+
 def get_img_path(img_name, voc12_root):
     if not isinstance(img_name, str):
         img_name = decode_int_filename(img_name)
@@ -60,6 +136,23 @@ def load_img_name_list(dataset_path):
     img_name_list = np.loadtxt(dataset_path, dtype=np.int32)
 
     return img_name_list
+
+# arr.shape: (m * divide_size, n * divide_size, l)
+# return.shape: (m * n, divide_size, divide_size, l)
+def array_to_divided_1d_array(
+    arr: np.ndarray,
+    divide_size: int,
+) -> np.ndarray:
+    m, n, l = arr.shape
+    m = m // divide_size
+    n = n // divide_size
+    result = np.zeros((m * n, divide_size, divide_size, l), dtype=np.int32)
+    for i in range(m):
+        for j in range(n):
+            r = i * divide_size
+            c = j * divide_size
+            result[i, j, :, :, :] = arr[r:r+divide_size, c:c+divide_size]
+    return result
 
 
 class TorchvisionNormalize():
@@ -171,6 +264,23 @@ class VOC12ClassificationDataset(VOC12ImageDataset):
         out['label'] = torch.from_numpy(self.label_list[idx])
 
         return out
+
+class VOC12ClassificationDividedDataset(VOC12ImageDataset):
+
+    def __init__(self, img_name_list_path, voc12_root,
+                 resize_long=None, rescale=None, img_normal=TorchvisionNormalize(), hor_flip=False,
+                 crop_size=None, crop_method=None):
+        super().__init__(img_name_list_path, voc12_root,
+                 resize_long, rescale, img_normal, hor_flip,
+                 crop_size, crop_method)
+        self.label_list = load_image_label_list_from_npy(self.img_name_list)
+
+    def __getitem__(self, idx):
+        out = super().__getitem__(idx)
+
+        out['label'] = torch.from_numpy(self.label_list[idx])
+
+        return out['img'], out['label'], hot_to_unique(self.label_list[idx], 20)
 
 class VOC12ClassificationDatasetMSF(VOC12ClassificationDataset):
 

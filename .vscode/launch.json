@@ -1,0 +1,33 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: run_sample.py",
+            "type": "python",
+            "request": "launch",
+            "program": "run_sample.py",
+            "args": [
+                "--voc12_root=VOCdevkit/VOC2012",
+                // "--train_cam",
+                "--cam_learning_rate=0.1",
+                "--cam_batch_size=64",
+                "--cam_crop_size=224",
+                "--patch_size=256",
+                "--cam_num_epoches=10",
+                // "--eval_cam",
+                "--cam_eval_thres=0.5",
+                "--make_cam"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true
+            // "env": {"CUDA_VISIBLE_DEVICES": "2,3"}
+        },
+        {
+            "name": "Python: File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "justMyCode": true
+        }
+    ]
+}

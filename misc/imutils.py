@@ -5,6 +5,9 @@ import pydensecrf.densecrf as dcrf
 from pydensecrf.utils import unary_from_labels
 from PIL import Image
 
+import torch
+import torchvision.transforms.functional as F
+
 def pil_resize(img, size, order):
     if size[0] == img.shape[0] and size[1] == img.shape[1]:
         return img
@@ -16,10 +19,26 @@ def pil_resize(img, size, order):
 
     return np.asarray(Image.fromarray(img).resize(size[::-1], resample))
 
+def tensor_resize(img, size, order):
+    if size[0] == img.shape[0] and size[1] == img.shape[1]:
+        return img
+
+    if order == 3:
+        resample = Image.BICUBIC
+    elif order == 0:
+        resample = Image.NEAREST
+
+    return F.pil_to_tensor(F.to_pil_image(img).resize(size[::-1], resample))
+
 def pil_rescale(img, scale, order):
     height, width = img.shape[:2]
     target_size = (int(np.round(height*scale)), int(np.round(width*scale)))
     return pil_resize(img, target_size, order)
+
+def tensor_rescale(img, scale, order):
+    height, width = img.shape[1:3]
+    target_size = (int(np.round(height*scale)), int(np.round(width*scale)))
+    return tensor_resize(img, target_size, order)
 
 
 def random_resize_long(img, min_long, max_long):
@@ -152,6 +171,9 @@ def center_crop(img, cropsize, default_value=0):
 
 def HWC_to_CHW(img):
     return np.transpose(img, (2, 0, 1))
+
+def HWC_to_CHW_tensor(img):
+    return torch.moveaxis(img, (0, 1, 2), (2, 0, 1))
 
 def crf_inference_label(img, labels, t=10, n_labels=21, gt_prob=0.7):
 

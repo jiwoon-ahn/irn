@@ -1,29 +1,24 @@
+from torch.backends import cudnn
+cudnn.enabled = True
 
-import numpy as np
-import os
-from chainercv.datasets import VOCSemanticSegmentationDataset
-from chainercv.evaluations import calc_semantic_segmentation_confusion
+from cityscapes.divided_datamodule import CityScapesDividedModule
+from net.resnet50_cam_lightning import CAM
+
+import pytorch_lightning as pl
+from pytorch_lightning.loggers.wandb import WandbLogger
 
 def run(args):
-    dataset = VOCSemanticSegmentationDataset(split=args.chainer_eval_set, data_dir=args.voc12_root)
-    labels = [dataset.get_example_by_keys(i, (1,))[0] for i in range(len(dataset))]
+    crop_size = args.cam_crop_size
+    batch_size = args.cam_batch_size
+    learning_rate = args.cam_learning_rate
+    weight_decay = args.cam_weight_decay
+    patch_size = args.patch_size
+    
+    model = CAM(learning_rate, weight_decay, 0.5, args.cam_out_dir, crop_size)
+    datamodule = CityScapesDividedModule(batch_size, patch_size, crop_size, False, False, args.cam_crop_size, args.cam_scales, args.cam_out_dir)
 
-    preds = []
-    for id in dataset.ids:
-        cam_dict = np.load(os.path.join(args.cam_out_dir, id + '.npy'), allow_pickle=True).item()
-        cams = cam_dict['high_res']
-        cams = np.pad(cams, ((1, 0), (0, 0), (0, 0)), mode='constant', constant_values=args.cam_eval_thres)
-        keys = np.pad(cam_dict['keys'] + 1, (1, 0), mode='constant')
-        cls_labels = np.argmax(cams, axis=0)
-        cls_labels = keys[cls_labels]
-        preds.append(cls_labels.copy())
-
-    confusion = calc_semantic_segmentation_confusion(preds, labels)
-
-    gtj = confusion.sum(axis=1)
-    resj = confusion.sum(axis=0)
-    gtjresj = np.diag(confusion)
-    denominator = gtj + resj - gtjresj
-    iou = gtjresj / denominator
-
-    print({'iou': iou, 'miou': np.nanmean(iou)})
+    logger = WandbLogger(project="irn-cityscapes", name="train_cam_grid_no_sigmoid")
+    logger.log_hyperparams(args)
+    
+    trainer = pl.Trainer(devices=1, num_nodes=1, logger=logger)
+    trainer.test(model, datamodule)
