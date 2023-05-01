@@ -14,7 +14,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.strategies.ddp import DDPStrategy
 
 def run(args):
-    wandb.init(project="irn-cityscapes", name="train_cam_grid_no_sigmoid")
+    wandb.init(project="irn-cityscapes", name="train_cam_grid_no_sigmoid", config=args)
     crop_size = wandb.config.cam_crop_size
     batch_size = wandb.config.cam_batch_size
     learning_rate = wandb.config.cam_learning_rate
@@ -28,4 +28,4 @@ def run(args):
     logger.log_hyperparams(args)
     
     trainer = pl.Trainer(logger=logger,strategy=DDPStrategy(find_unused_parameters=True))
-    trainer.predict(model, datamodule, ckpt_path="/workspaces/irn/models/train/epoch=8-val_loss=-0.23-val_macro_precision=0.59-val_micro_precision=0.84.ckpt")
+    trainer.predict(model, datamodule, ckpt_path="/workspaces/irn/models/train/epoch=4-val_loss=-0.39-val_macro_precision=0.67-val_micro_precision=0.85.ckpt")

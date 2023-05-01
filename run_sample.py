@@ -94,13 +94,11 @@ if __name__ == '__main__':
     if args.make_cam is True:
         import step.make_cam
 
-        timer = pyutils.Timer('step.make_cam:')
         step.make_cam.run(args)
 
     if args.eval_cam is True:
         import step.eval_cam
 
-        timer = pyutils.Timer('step.eval_cam:')
         step.eval_cam.run(args)
 
     if args.cam_to_ir_label is True:

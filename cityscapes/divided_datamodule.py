@@ -94,7 +94,6 @@ class CityScapesDividedModule(pl.LightningDataModule):
             divide=Divide.Val,
             patch_size=self.patch_size,
             cam_out_dir=self.cam_out_dir,
-            cam_size=self.cam_crop_size,
             transform=transform
         )
         return DataLoader(dataset, batch_size=32, shuffle=False, num_workers=10)

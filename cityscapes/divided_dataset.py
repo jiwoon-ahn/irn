@@ -96,23 +96,22 @@ class CityScapesDividedPTHCAMDataset(Dataset):
     _full_height = 1024
     _cityscapes_dir = "/workspaces/datasets/cityscapes"
 
-    def __init__(self, divide: Divide, patch_size: int, cam_out_dir: str, cam_size:int, transform: typing.Union[typing.Callable ,None]) -> None:
+    def __init__(self, divide: Divide, patch_size: int, cam_out_dir: str, transform: typing.Union[typing.Callable ,None]) -> None:
         self._cam_out_dir = cam_out_dir
-        self._dataset = CityScapesDividedDataset(divide, ["sem_seg_label"], patch_size, transform)
-        self._cam_size = cam_size
-        self._resize = Resize((cam_size, cam_size), interpolation=InterpolationMode.NEAREST)
+        self._dataset = CityScapesDividedDataset(divide, ["img", "sem_seg_label"], patch_size, transform)
 
     def __getitem__(self, index):
-        (basename, row_index, col_index, sem_seg_label) = self._dataset[index]
+        (basename, row_index, col_index, img, sem_seg_label) = self._dataset[index]
         basename = path.splitext(basename)[0]
         filename_prefix = path.join(self._cam_out_dir, f'{basename}_{row_index}_{col_index}')
 
         cams = np.load(filename_prefix + '_highres.npy')
 
-        return cams, sem_seg_label
+        return cams, img, sem_seg_label
 
     def __len__(self):
         return len(self._dataset)
+
 
 class VOC2012DividedDataset(Dataset):
     _dir = "/home/postech2/irn/VOCdevkit/VOC2012/Divided"
